@@ -1,0 +1,27 @@
+# Ignore everything by default
+*
+
+# But allow specific file types
+!*.pdf
+!*.csv
+!*.txt
+!*.md
+!*.R
+!*.r
+
+# Allow directories (so git can traverse them)
+!*/
+
+# Special files to include
+!.gitignore
+!README.md
+!LICENSE
+
+# Common R-specific exceptions you might want to keep
+# Uncomment these if you want to include them:
+# !*.Rproj
+# !*.Rmd
+# !*.rmd
+
+# Note: This gitignore uses a "whitelist" approach
+# Everything is ignored except the specified file types
