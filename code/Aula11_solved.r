@@ -195,3 +195,190 @@ data_seasonal <- data_10 |>
 
 ts_seasonal <- ts(data_seasonal$prec_seasonal, frequency = 4)
 decompose(ts_seasonal, type = "additive") |> plot()
+
+
+# %% 4. Estatisticas básicas
+
+#%% 4.1  Média e desvio padrão móvel ------
+
+# A média móvel é uma técnica simples para suavizar séries temporais
+# e identificar tendências subjacentes. Ela calcula a média dos valores
+# em uma janela deslizante ao longo do tempo. O desvio padrão móvel mede
+# a variabilidade dos valores dentro dessa janela. Ambos são úteis para
+# analisar séries temporais, destacando tendências e flutuações.
+
+data_10 %>%
+    arrange(date) %>%
+    mutate(
+        moving_avg = zoo::rollmean(prec, k = 30, fill = NA, align = "right"),
+        moving_sd = zoo::rollapply(
+            prec,
+            width = 30,
+            FUN = sd,
+            fill = NA,
+            align = "right"
+        )
+    ) |>
+    ggplot(aes(x = date)) +
+    geom_line(aes(y = prec), color = "lightblue", size = 1) +
+    geom_line(aes(y = moving_avg), color = "blue", size = 1) +
+    geom_ribbon(
+        aes(ymin = moving_avg - moving_sd, ymax = moving_avg + moving_sd),
+        fill = "blue",
+        alpha = 0.2
+    ) +
+    labs(x = "Data", y = "Chuva (mm)") +
+    theme_minimal() +
+    theme(text = element_text(size = 30))
+
+# %% 4.2 Autocorrelação ------
+
+# A autocorrelação mede a correlação entre uma série temporal e uma
+# versão defasada dela mesma. Ela ajuda a identificar padrões repetitivos
+# e a dependência temporal nos dados.
+
+ts(data_monthly$prec_monthly, frequency = 12) |>
+    stats::acf(lag.max = 48, main = "Autocorrelação") # ACF
+
+# A autocorrelação parcial (PACF) mede a correlação entre uma série temporal
+# e uma versão defasada dela mesma, removendo os efeitos das defasagens
+# intermediárias. Ela ajuda a identificar a ordem de um modelo AR
+# (AutoRegressivo) apropriado para a série temporal.
+ts(data_monthly$prec_monthly, frequency = 12) |>
+    stats::acf(lag.max = 48, main = "Autocorrelação", type = "partial") # PACF - parcial
+
+#%% 6. Modelos estocásticos ------
+
+# %% 6.1 white noise ------
+# White noise é uma série temporal composta por valores aleatórios
+# independentes e identicamente distribuídos, com média zero e variância
+# constante. É usado como um modelo básico para ruído em séries temporais.
+set.seed(123)
+white_noise <- rnorm(1000, mean = 0, sd = 1) # 100 valores aleatórios
+ts_white_noise <- ts(white_noise)
+plot(ts_white_noise, main = "White Noise", ylab = "Value", xlab = "Time")
+
+acf(ts_white_noise, lag.max = 30, main = "ACF of White Noise")
+acf(ts_white_noise, lag.max = 30, main = "ACF of White Noise", type = "partial")
+
+# %% 6.2 Random Walk ------
+# Random walk é uma série temporal onde cada valor é a soma do valor
+# anterior e um termo de ruído aleatório. É usado para modelar processos
+# que evoluem de forma imprevisível ao longo do tempo.
+set.seed(123)
+random_steps <- rnorm(1000, mean = 0, sd = 1)
+random_walk <- cumsum(random_steps) # soma cumulativa
+ts_random_walk <- ts(random_walk)
+plot(ts_random_walk, main = "Random Walk", ylab = "Value", xlab = "Time")
+
+acf(ts_random_walk, lag.max = 30, main = "ACF of Random Walk")
+acf(ts_random_walk, lag.max = 30, main = "ACF of Random Walk", type = "partial")
+
+# %% 6.3 Moving Average (AM) ------
+
+# Moving Average (MA) é um modelo onde o valor atual da série temporal
+# é uma média ponderada dos erros passados. É usado para modelar séries
+# temporais com dependência de curto prazo.
+
+set.seed(123)
+ma_order <- 2 # ordem do modelo MA
+ma_coeffs <- c(0.5, 0.3) # coeficientes
+white_noise_ma <- rnorm(1000, mean = 0, sd = 1)
+# Use stats::filter() para convolução, não dplyr::filter()
+ma_series <- stats::filter(
+    white_noise_ma,
+    ma_coeffs,
+    method = "convolution",
+    sides = 1
+) |>
+    na.omit() # remove NA values created by convolution
+
+ts_ma <- ts(ma_series)
+plot(ts_ma, main = "Moving Average (MA)", ylab = "Value", xlab = "Time")
+
+acf(ts_ma, lag.max = 30, main = "ACF of MA")
+acf(ts_ma, lag.max = 30, main = "PACF of MA", type = "partial")
+
+# %% 6.4 Autoregressive (AR) ------
+# Autoregressive (AR) é um modelo onde o valor atual da série temporal
+# é uma combinação linear dos valores passados. É usado para modelar séries
+# temporais com dependência de longo prazo.
+
+set.seed(123)
+ar_coeffs <- c(0.7, -0.3) # coeficientes
+white_noise_ar <- rnorm(1000, mean = 0, sd = 1)
+ar_series <- numeric(length(white_noise_ar))
+for (t in (length(ar_coeffs) + 1):length(white_noise_ar)) {
+    ar_series[t] <- sum(
+        ar_coeffs *
+            rev(ar_series[(t - length(ar_coeffs)):(t - 1)])
+    ) +
+        white_noise_ar[t]
+}
+ts_ar <- ts(ar_series)
+plot(ts_ar, main = "Autoregressive (AR)", ylab = "Value", xlab = "Time")
+
+acf(ts_ar, lag.max = 30, main = "ACF of AR")
+acf(ts_ar, lag.max = 30, main = "PACF of AR", type = "partial")
+
+# %% 6.5 ARMA (Autoregressive Moving Average) ------
+# ARMA combina os modelos AR e MA, onde o valor atual da série temporal
+# depende tanto dos valores passados quanto dos erros passados. É usado
+# para modelar séries temporais com dependência de curto e longo prazo.
+
+set.seed(123)
+ar_coeffs_arma <- c(0.5, -0.3) # coeficientes AR
+ma_coeffs_arma <- c(0.4, -0.2) # coeficientes MA
+white_noise_arma <- rnorm(1000, mean = 0, sd = 1)
+arma_series <- numeric(length(white_noise_arma))
+for (t in (max(length(ar_coeffs_arma), length(ma_coeffs_arma)) + 1):length(
+    white_noise_arma
+)) {
+    arma_series[t] <- sum(
+        ar_coeffs_arma *
+            rev(arma_series[(t - length(ar_coeffs_arma)):(t - 1)])
+    ) +
+        sum(
+            ma_coeffs_arma *
+                rev(white_noise_arma[(t - length(ma_coeffs_arma)):(t - 1)])
+        ) +
+        white_noise_arma[t]
+}
+ts_arma <- ts(arma_series)
+plot(ts_arma, main = "ARMA", ylab = "Value", xlab = "Time")
+
+acf(ts_arma, lag.max = 30, main = "ACF of ARMA")
+acf(ts_arma, lag.max = 30, main = "PACF of ARMA", type = "partial")
+
+# %% 6.6 ARIMA (Autoregressive Integrated Moving Average) ------
+# ARIMA é uma extensão do modelo ARMA que inclui uma etapa de diferenciação
+# para tornar a série temporal estacionária. É usado para modelar séries
+# temporais não estacionárias com dependência de curto e longo prazo.
+
+set.seed(123)
+ar_coeffs_arima <- c(0.5) # coeficientes AR
+ma_coeffs_arima <- c(0.4) # coeficientes MA
+white_noise_arima <- rnorm(1000, mean = 0, sd = 1)
+arima_series <- numeric(length(white_noise_arima))
+# Diferenciação de ordem 1
+diff_series <- c(0, diff(white_noise_arima))
+for (t in (max(length(ar_coeffs_arima), length(ma_coeffs_arima)) + 1):length(
+    diff_series
+)) {
+    arima_series[t] <- sum(
+        ar_coeffs_arima *
+            rev(arima_series[(t - length(ar_coeffs_arima)):(t - 1)])
+    ) +
+        sum(
+            ma_coeffs_arima *
+                rev(diff_series[(t - length(ma_coeffs_arima)):(t - 1)])
+        ) +
+        diff_series[t]
+}
+ts_arima <- ts(arima_series)
+plot(ts_arima, main = "ARIMA", ylab = "Value", xlab = "Time")
+
+acf(ts_arima, lag.max = 30, main = "ACF of ARIMA")
+acf(ts_arima, lag.max = 30, main = "PACF of ARIMA", type = "partial")
+
+# %% 6.6A - Utilizando a função arima
