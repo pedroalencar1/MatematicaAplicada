@@ -19,6 +19,7 @@ library(ggplot2) # Para visualização dos resultados
 #' alemão (DWD)
 
 # Verifica se o pacote está instalado, se não, instala
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
 if (!require(rdwd, quietly = TRUE)) {
     install.packages("rdwd")
     library(rdwd)
@@ -247,9 +248,9 @@ ts(data_monthly$prec_monthly, frequency = 12) |>
 ts(data_monthly$prec_monthly, frequency = 12) |>
     stats::acf(lag.max = 48, main = "Autocorrelação", type = "partial") # PACF - parcial
 
-#%% 6. Modelos estocásticos ------
+#%% 5. Modelos estocásticos ------
 
-# %% 6.1 white noise ------
+# %% 5.1 white noise ------
 # White noise é uma série temporal composta por valores aleatórios
 # independentes e identicamente distribuídos, com média zero e variância
 # constante. É usado como um modelo básico para ruído em séries temporais.
@@ -261,7 +262,7 @@ plot(ts_white_noise, main = "White Noise", ylab = "Value", xlab = "Time")
 acf(ts_white_noise, lag.max = 30, main = "ACF of White Noise")
 acf(ts_white_noise, lag.max = 30, main = "ACF of White Noise", type = "partial")
 
-# %% 6.2 Random Walk ------
+# %% 5.2 Random Walk ------
 # Random walk é uma série temporal onde cada valor é a soma do valor
 # anterior e um termo de ruído aleatório. É usado para modelar processos
 # que evoluem de forma imprevisível ao longo do tempo.
@@ -274,7 +275,7 @@ plot(ts_random_walk, main = "Random Walk", ylab = "Value", xlab = "Time")
 acf(ts_random_walk, lag.max = 30, main = "ACF of Random Walk")
 acf(ts_random_walk, lag.max = 30, main = "ACF of Random Walk", type = "partial")
 
-# %% 6.3 Moving Average (AM) ------
+# %% 5.3 Moving Average (AM) ------
 
 # Moving Average (MA) é um modelo onde o valor atual da série temporal
 # é uma média ponderada dos erros passados. É usado para modelar séries
@@ -299,7 +300,7 @@ plot(ts_ma, main = "Moving Average (MA)", ylab = "Value", xlab = "Time")
 acf(ts_ma, lag.max = 30, main = "ACF of MA")
 acf(ts_ma, lag.max = 30, main = "PACF of MA", type = "partial")
 
-# %% 6.4 Autoregressive (AR) ------
+# %% 5.4 Autoregressive (AR) ------
 # Autoregressive (AR) é um modelo onde o valor atual da série temporal
 # é uma combinação linear dos valores passados. É usado para modelar séries
 # temporais com dependência de longo prazo.
@@ -321,7 +322,7 @@ plot(ts_ar, main = "Autoregressive (AR)", ylab = "Value", xlab = "Time")
 acf(ts_ar, lag.max = 30, main = "ACF of AR")
 acf(ts_ar, lag.max = 30, main = "PACF of AR", type = "partial")
 
-# %% 6.5 ARMA (Autoregressive Moving Average) ------
+# %% 5.5 ARMA (Autoregressive Moving Average) ------
 # ARMA combina os modelos AR e MA, onde o valor atual da série temporal
 # depende tanto dos valores passados quanto dos erros passados. É usado
 # para modelar séries temporais com dependência de curto e longo prazo.
@@ -350,7 +351,7 @@ plot(ts_arma, main = "ARMA", ylab = "Value", xlab = "Time")
 acf(ts_arma, lag.max = 30, main = "ACF of ARMA")
 acf(ts_arma, lag.max = 30, main = "PACF of ARMA", type = "partial")
 
-# %% 6.6 ARIMA (Autoregressive Integrated Moving Average) ------
+# %% 5.6 ARIMA (Autoregressive Integrated Moving Average) ------
 # ARIMA é uma extensão do modelo ARMA que inclui uma etapa de diferenciação
 # para tornar a série temporal estacionária. É usado para modelar séries
 # temporais não estacionárias com dependência de curto e longo prazo.
@@ -381,4 +382,147 @@ plot(ts_arima, main = "ARIMA", ylab = "Value", xlab = "Time")
 acf(ts_arima, lag.max = 30, main = "ACF of ARIMA")
 acf(ts_arima, lag.max = 30, main = "PACF of ARIMA", type = "partial")
 
-# %% 6.6A - Utilizando a função arima
+# %% 5.7. Modelagem com ARIMA ------
+
+library(forecast)
+
+# Frequência mensal
+data_monthly <- data |>
+    mutate(year = lubridate::year(date), month = lubridate::month(date)) |>
+    group_by(year, month) |>
+    summarise(temp = mean(temp, na.rm = TRUE)) |>
+    ungroup() |>
+    mutate(date = as.Date(paste(year, month, "15", sep = "-"))) # mid-month
+
+ts_monthly <- ts(data_monthly$temp, frequency = 12)
+
+# decompose a série temporal
+decompose(ts_monthly, type = "additive") |> plot()
+
+# ajusta o modelo ARIMA automaticamente
+
+# para testes iniciais:
+arima_model <- auto.arima(ts_monthly)
+
+# Pode-se adicionar parametros adicionais para melhorar o ajuste:
+# arima_model <- auto.arima(ts_monthly,
+#     lambda = "auto", # Box-Cox transformation
+#     seasonal = TRUE, # Seasonal component
+#     seasonal.test = "seas", # Test for seasonal differencing
+#     stepwise = FALSE, # Use full search
+#     approximation = FALSE, # No approximation
+#     parallel = TRUE, num.cores = 4 # Parallel processing - accelerates model
+# )
+
+summary(arima_model)
+# diagnostico do modelo
+checkresiduals(arima_model)
+# residuais parecem ser ruído branco (white noise)?
+# Se sim, o modelo é adequado.
+# repare que os residuos apresentao distribuição normal (histograma) e média 0
+# também não apresentam autocorrelação (ACF).
+tseries::adf.test(residuals(arima_model))
+# residuais são estacionários (p < 0.05)
+
+# parametros do modelo
+arimaorder(arima_model)
+# (p, d, q)(P, D, Q)[m]
+
+# Estes parametros podem ser usados para ajustar manualmente o modelo ARIMA:
+arima_model_manual <- arima(
+    ts_monthly,
+    order = c(1, 0, 0), # (p, d, q)
+    seasonal = list(order = c(1, 1, 0), period = 12) # (P, D, Q)[m]
+)
+
+# Previsões
+forecast_values <- forecast(arima_model, h = 12) # Forecast next 12 months
+
+# Plot customizado mostrando apenas os últimos 5 anos + previsão
+plot(
+    forecast_values,
+    xlim = c(time(ts_monthly)[1518], max(time(forecast_values$mean))),
+    main = "Previsão de Temperatura - Últimos 5 anos + 12 meses",
+    xlab = "Tempo",
+    ylab = "Temperatura (°C)"
+)
+
+
+# Exercicio:
+#' Ajuste o modelo arima para o periodo de 1893 a 2000 e faça previsões
+#' para os anos seguintes. Compare as previsões com os dados observados
+#' de 2001 a 2024.
+
+# %% 6. Bonus - Análise de Breakpoints ------
+
+library(strucchange)
+
+# get data and timeseries
+temp_year <- data |>
+    filter(date >= as.Date("1893-01-01") & date <= as.Date("2024-12-31")) |>
+    mutate(
+        year = lubridate::year(date),
+    ) |>
+    group_by(year) |>
+    summarise(temp = mean(temp, na.rm = TRUE)) |>
+    ungroup()
+
+ts_temp <- ts(temp_year$temp, start = c(1893))
+plot(ts_temp)
+
+
+# h = mínimo de observações entre breakpoints
+# breaks = número máximo de breakpoints a serem testados
+bp <- breakpoints(ts_temp ~ 1, h = 5, breaks = 5)
+summary(bp)
+plot(bp)
+
+# interpretando o plot acima:
+# A recomendação estatistica é escolher o numero de breakpoints
+# que minimiza o BIC (Bayesian Information Criterion). Contudo, é comum
+# recomendar-se a escolha do numero de breakpoints em que BIC e RSS cruzem-se.
+# Pelo gráfico, o critério 1 sugere 1 breakpoint, enquanto o critério 2 sugere
+# 2 breakpoints.
+
+# %% Caso com 1 breakpoint
+# cria um fator para os segmentos
+fac_1 <- breakfactor(bp, breaks = 2, label = "seg")
+
+# ajusta o modelo linear com os segmentos
+fm_1 <- lm(ts_temp ~ fac_1)
+
+# intervalos de confiança
+ci_temp_1 <- confint(bp, breaks = 2, het.err = FALSE, level = 0.95)
+
+# plot
+plot(ts_temp)
+lines(ci_temp_1)
+
+# Caso com 2 breakpoints
+fac_2 <- breakfactor(bp, breaks = 3, label = "seg")
+fm_2 <- lm(ts_temp ~ fac_2)
+ci_temp_2 <- confint(bp, breaks = 3, het.err = FALSE, level = 0.95)
+
+plot(ts_temp)
+lines(ci_temp_2)
+
+# %% testeando a validade dos modelosn
+# 1. Autocorrelation
+
+acf(fm_1$residuals, type = "correlation") # No autocorrelation observed
+acf(fm_2$residuals, type = "correlation") # No autocorrelation observed
+
+# 2. Stationarity - Augmented Dickey-Fuller Test
+library(tseries)
+adf_test_1 <- adf.test(fm_1$residuals, alternative = "stationary")
+print(adf_test_1) # p-value < 0.05 indicates stationarity
+
+adf_test_2 <- adf.test(fm_2$residuals, alternative = "stationary")
+print(adf_test_2) # p-value < 0.05 indicates stationarity
+# note, the adf test indicates that the resivuals are stationary, not that the # series itself is stationary!
+
+adf.test(ts_temp, alternative = "stationary")
+# p-value > 0.05 indicates non-stationarity of the original series
+
+# EXERCISE: Apply breakpoint analysis to the precipitation data, min and max
+# temperatures and compare the results.
