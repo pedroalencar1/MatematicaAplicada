@@ -6,7 +6,7 @@ Contato: pedro.alencar@campus.tu-berlin.de
 ## Calendário
 
 **2025.2**
-% escrever como tabela:
+
 | Aula | Data       | Tópico                                   |
 |------|------------|------------------------------------------|
 | 9    | 12/11/2025 | Equações Diferenciais Ordinárias		 |
