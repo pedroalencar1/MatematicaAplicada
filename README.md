@@ -3,6 +3,17 @@
 Autor: Dr. Pedro Alencar
 Contato: pedro.alencar@campus.tu-berlin.de
 
+## Calendário
+
+**2025.2**
+% escrever como tabela:
+| Aula | Data       | Tópico                                   |
+|------|------------|------------------------------------------|
+| 9    | 12/11/2025 | Equações Diferenciais Ordinárias		 |
+| 10   | 26/11/2025 | Equações não lineares e otimização		 |
+| 11   | 03/12/2025 | Séries temporais						 |			
+| 12   | 10/12/2025 | Sensibilidade e incerteza				 |
+
 Neste repositório, você encontrará materiais e recursos relacionados à matemática aplicada, incluindo slides das aulas, referências bibliográficas, artigos científicos e scripts utilizados nas aulas (com e sem resolução). 
 
 O conteudo é referente as aulas 9 a 12:
