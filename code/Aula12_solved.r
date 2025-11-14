@@ -37,18 +37,21 @@ library(lhs)
 # Número de simulações
 n_sim <- 1000
 
-monte_carlo_pi <- function(n_sim) {
-    # Gerar pontos aleatórios (x, y) no quadrado unitário
-    set.seed(123) # Para reprodutibilidade
-    x <- runif(n_sim, min = 0, max = 1)
-    y <- runif(n_sim, min = 0, max = 1)
-    # Calcular a distância do ponto (x, y) à origem (0, 0)
-    distancia <- sqrt(x^2 + y^2)
-    # Contar quantos pontos caem dentro do círculo de raio 1
-    dentro_circulo <- sum(distancia <= 1)
-    # Estimar o valor de pi
-    pi_estimate <- (dentro_circulo / n_sim) * 4
-    return(list(pi_estimate = pi_estimate, x = x, y = y))
+monte_carlo_pi <- function(n_sim, set_seed = TRUE) {
+  # Gerar pontos aleatórios (x, y) no quadrado unitário
+  if (set_seed) {
+    set.seed(123)
+  } # Para reprodutibilidade
+
+  x <- runif(n_sim, min = 0, max = 1)
+  y <- runif(n_sim, min = 0, max = 1)
+  # Calcular a distância do ponto (x, y) à origem (0, 0)
+  distancia <- sqrt(x^2 + y^2)
+  # Contar quantos pontos caem dentro do círculo de raio 1
+  dentro_circulo <- sum(distancia <= 1)
+  # Estimar o valor de pi
+  pi_estimate <- (dentro_circulo / n_sim) * 4
+  return(list(pi_estimate = pi_estimate, x = x, y = y))
 }
 
 pi_result <- monte_carlo_pi(n_sim)
@@ -58,136 +61,185 @@ y <- pi_result$y
 
 print(paste("Estimativa de pi com", n_sim, "simulações:", pi_estimate))
 
-# plotting
-theta <- seq(0, pi/2, length.out = 100)
+#%% 1.2 plotting --------
+theta <- seq(0, pi / 2, length.out = 100)
 circle_quarter <- data.frame(
-    x_circle = cos(theta),
-    y_circle = sin(theta)
+  x_circle = cos(theta),
+  y_circle = sin(theta)
 )
 
 ggplot(data.frame(x, y), aes(x = x, y = y)) +
-    geom_point(alpha = 0.3) +
-    geom_path(data = circle_quarter, aes(x = x_circle, y = y_circle), 
-              color = "red", size = 1) +
-    coord_fixed() +
-    labs(
-        x = "X",
-        y = "Y"
-    ) +
-    scale_x_continuous(limits = c(0, 1)) +
-        scale_y_continuous(limits = c(0, 1)) +
-        theme_minimal() +
-        theme(text = element_text(size = 30))
+  geom_point(alpha = 0.3) +
+  geom_path(
+    data = circle_quarter,
+    aes(x = x_circle, y = y_circle),
+    color = "red",
+    size = 1
+  ) +
+  coord_fixed() +
+  labs(
+    x = "X",
+    y = "Y"
+  ) +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_minimal() +
+  theme(text = element_text(size = 30))
 
 
-#%% 1.2 Aplicação em Engenharia Agrícola ------
-# Exemplo Monte Carlo com Curve Number (SCS-CN)
+#%% 1.3 monte carlo convergence --------
+# n_sim_values <- seq(100, 10000, by = 100)
 
+s <- 5000 # número de simulações para cada repetição
+n <- 1000 # número de repetições para ver a convergência
+
+n_sim_values <- rep(s, n)
+pi_estimates <- sapply(n_sim_values, function(i) {
+  result <- monte_carlo_pi(i, set_seed = FALSE)
+  return(result$pi_estimate)
+})
+
+plot(pi_estimates)
+
+# %% 1.4 plotando a convergência da média cumulativa --------
+running_mean <- cumsum(pi_estimates) / seq_along(pi_estimates)
+
+
+ggplot(
+  data = data.frame(x = seq(n), mean = running_mean),
+  aes(x = x, y = mean)
+) +
+  geom_line(color = "blue") +
+  labs(
+    x = "Número de simulações",
+    y = "Média cumulativa de pi estimado"
+  ) +
+  geom_hline(yintercept = pi, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  theme(text = element_text(size = 20))
+
+#%% 2 Aplicação em Engenharia Agrícola ------
+# uso de Monte Carlo para estimar incertezas na performance de modelos hidrológicos simples
+
+# crie um dataframe com valores medidos e modelados de vazao.
+# compute NSE para todo o conjunto
+# agorausando monte carlo, selecione subconjuntos aleatoios e compute o NSE dos subconjuntos
+# o obtenha a distribuicao do NSE
+# Gerar dados de vazão observada e modelada
 set.seed(123)
 
-cn_to_q <- function(prec, cn, ia_fac = 0.2) {
-  # prec: precipitação (mm)
-  # cn: curve number (30-98 typical)
-  # ia_fac: fator para precipitação inicial (padrão 0.2 em SCS)
-  storage <- (25400 / cn) - 254   # profundidade máxima de retenção S (mm)
-  ia <- ia_fac * storage
-  discharge <- ifelse(prec <= ia, 0, ((prec - ia)^2) / (prec - ia + storage))
-  return(discharge)
+n <- 100
+data <- data.frame(vazao_observada = rnorm(n = n, mean = 50, sd = 10)) |>
+  mutate(vazao_modelada = vazao_observada + rnorm(n = n, mean = 0, sd = 5)) #ruido
+
+# Função para calcular o NSE
+nse <- function(observado, modelado) {
+  1 - sum((observado - modelado)^2) / sum((observado - mean(observado))^2)
 }
 
-#-------------- Parâmetros de entrada plausíveis ---------------
-N <- 10000                # número de simulações Monte Carlo
-shape_p <- 2.5
-scale_p <- 10             # P ~ Gamma(shape, scale)
-mu_cn <- 75
-sd_cn <- 8
+# Calcular o NSE para todo o conjunto de dados
+nse_total <- nse(data$vazao_observada, data$vazao_modelada)
+print(paste("NSE total:", round(nse_total, 3)))
 
-#-------------- Monte Carlo simples (amostragem i.i.d.) ---------------
-P_mc <- rgamma(N, shape = shape_p, scale = scale_p)
-CN_mc <- rnorm(N, mean = mu_cn, sd = sd_cn) %>% pmin(98) %>% pmax(30)
-Q_mc <- cn_to_q(P_mc, CN_mc, ia_fac = 0.2)
+#%% 2.1 Monte Carlo para estimar a incerteza do NSE ------
 
-df_mc <- tibble(P = P_mc, CN = CN_mc, Q = Q_mc)
+n_subsets <- 1000
+subset_size <- 50
 
-# Estatísticas resumidas
-res_mc <- df_mc %>% summarise(
-  mean_Q = mean(Q),
-  sd_Q = sd(Q),
-  median_Q = median(Q),
-  q025 = quantile(Q, 0.025),
-  q975 = quantile(Q, 0.975),
-  prob_Q_gt_10 = mean(Q > 10)  # prob. de Q > 10 mm (exemplo)
+set.seed(123)
+nse_values <- numeric(n_subsets)
+for (i in 1:n_subsets) {
+  subset_indices <- sample(1:n, subset_size, replace = TRUE)
+  subset_data <- data[subset_indices, ]
+  nse_values[i] <- nse(subset_data$vazao_observada, subset_data$vazao_modelada)
+}
+
+hist(
+  nse_values,
+  breaks = 30,
+  main = "Distribuição do NSE via Monte Carlo",
+  xlab = "NSE",
+  col = "lightblue"
 )
-print(res_mc)
 
-# Plots básicos
-p1 <- ggplot(df_mc, aes(x = Q)) +
-  geom_histogram(bins = 60, fill = "skyblue", color = "gray40") +
-  labs(x = "Escoamento Q (mm)", title = "Distribuição empírica de Q (Monte Carlo)")
+# %% 2.2 Estatísticas do NSE estimado ------
+nse_mean <- mean(nse_values)
+nse_sd <- sd(nse_values)
 
-p2 <- ggplot(df_mc, aes(x = P, y = Q)) +
-  geom_point(alpha = 0.25, size = 0.8) + labs(title = "P vs Q", x = "Precipitação P (mm)", y = "Q (mm)")
+q_97_5 <- quantile(nse_values, 0.975)
+q_2_5 <- quantile(nse_values, 0.025)
 
-p3 <- ggplot(df_mc, aes(x = CN, y = Q)) +
-  geom_point(alpha = 0.25, size = 0.8) + labs(title = "CN vs Q", x = "Curve Number (CN)", y = "Q (mm)")
+print(paste("Média do NSE:", round(nse_mean, 3)))
+print(paste("Desvio padrão do NSE:", round(nse_sd, 3)))
+print(paste(
+  "Intervalo de confiança 95% do NSE: [",
+  round(q_2_5, 3),
+  ", ",
+  round(q_97_5, 3),
+  "]",
+  sep = ""
+))
 
-# Salvar gráficos (opcional)
-# ggsave("hist_Q_mc.png", p1, width = 7, height = 4)
-print(p1); print(p2); print(p3)
+# %% 3 Avaliando incertezas em parâmetros de modelos ------
 
-#-------------- Convergência simples (médias para Ns diferentes) ---------------
-test_Ns <- c(100, 500, 1000, 2000, 5000, 10000)
-conv <- tibble(N = integer(), mean_Q = double(), q975 = double())
-for (n in test_Ns) {
-  P_tmp <- rgamma(n, shape = shape_p, scale = scale_p)
-  CN_tmp <- rnorm(n, mean = mu_cn, sd = sd_cn) %>% pmin(98) %>% pmax(30)
-  Q_tmp <- cn_to_q(P_tmp, CN_tmp)
-  conv <- bind_rows(conv, tibble(N = n, mean_Q = mean(Q_tmp), q975 = quantile(Q_tmp, 0.975)))
+#' vamos estimar o valor de CN e sua incerteza a partir de dados medidos de
+#' precipitação e escoamento.
+
+# selecione dos dados
+link <- rdwd::selectDWD(
+  "Potsdam",
+  res = "daily",
+  var = "kl",
+  per = "historical",
+  current = TRUE
+)
+
+# baixe os dados (read=FALSE apenas baixa o arquivo, sem ler)
+file <- rdwd::dataDWD(link, read = FALSE)
+
+# leia os dados
+clim <- rdwd::readDWD(file, varnames = TRUE) # can happen directly in dataDWD
+
+# selecione dados desejados
+data <- clim %>%
+  select(MESS_DATUM, RSK.Niederschlagshoehe) %>%
+  rename(
+    date = MESS_DATUM,
+    prec = RSK.Niederschlagshoehe,
+  ) |>
+  dplyr::mutate(date = as.Date(as.character(date), format = "%Y-%m-%d"))
+
+# %% 3.1 Calcular escoamento diário (simplificado) ------
+
+# Função para calcular escoamento Q a partir de precipitação P e CN
+p_to_q <- function(prec, cn, ia = 0.1) {
+  S <- (25400 / cn) - 254
+  Q <- ifelse(prec > ia * S, (prec - ia * S)^2 / (prec + S * (1 - ia)), 0)
+  return(Q)
 }
-print(conv)
+# Gerar dados sintéticos de escoamento com CN variável
+set.seed(123)
 
-ggplot(conv, aes(x = N, y = mean_Q)) + geom_line() + geom_point() +
-  labs(title = "Convergência da média de Q com N", x = "Número de simulações (N)", y = "mean(Q)")
+data$runoff <- NA
+for (i in 1:nrow(data)) {
+  cn <- rnorm(1, mean = 85, sd = 5) %>%
+    pmin(99) %>%
+    pmax(70)
 
-#-------------- Latin Hypercube Sampling (LHS) ---------------
-N_lhs <- 2000
-U <- randomLHS(N_lhs, 2)  # duas variáveis: P e CN
+  data$runoff[i] <- p_to_q(data$prec[i], cn)
+}
 
-# Transformar U para as distribuições escolhidas
-P_lhs <- qgamma(U[,1], shape = shape_p, scale = scale_p)
-CN_lhs <- qnorm(U[,2], mean = mu_cn, sd = sd_cn) %>% pmin(98) %>% pmax(30)
+# %% 3.2 Estimar incerteza do CN via Monte Carlo ------
+# Vamos variar CN entre 30 e 100 e calcular o NSE para cada valor
+head(data)
+df_nse <- data.frame(cn = integer(), nse = numeric())
+for (cn in 30:100) {
+  data <- data %>%
+    mutate(
+      q_est = p_to_q(prec, cn)
+    )
 
-Q_lhs <- cn_to_q(P_lhs, CN_lhs)
-df_lhs <- tibble(P = P_lhs, CN = CN_lhs, Q = Q_lhs)
+  nse_value <- nse(data$runoff, data$q_est)
 
-# Comparar estatísticas MC vs LHS (mesma ideia)
-res_lhs <- df_lhs %>% summarise(mean_Q = mean(Q), sd_Q = sd(Q), prob_Q_gt_10 = mean(Q > 10))
-print(bind_rows(MC = res_mc %>% select(mean_Q, sd_Q, prob_Q_gt_10), LHS = res_lhs), .id = "method")
-
-#-------------- Sensibilidade simples: Spearman e PRCC aproximado ---------------
-# Correlações de Spearman
-spearman_P <- cor(df_lhs$P, df_lhs$Q, method = "spearman")
-spearman_CN <- cor(df_lhs$CN, df_lhs$Q, method = "spearman")
-cat("Spearman(P,Q) =", round(spearman_P, 3), "\n")
-cat("Spearman(CN,Q) =", round(spearman_CN, 3), "\n")
-
-# PRCC aproximado: regressão linear nos ranks
-df_ranks <- df_lhs %>% mutate(across(everything(), ~rank(.)))
-lm_prcc <- lm(Q ~ P + CN, data = df_ranks %>% rename(Q = Q, P = P, CN = CN))
-summary(lm_prcc)
-# coeficientes da regressão dos ranks: interpretação como PRCC aproximado (sinais e importância relativa)
-
-#-------------- Probabilidade condicional / risco prático ---------------
-limiar <- 20  # mm, exemplo de limiar crítico para escoamento
-prob_excede <- mean(df_lhs$Q > limiar)
-cat("Probabilidade estimada de Q >", limiar, "mm (LHS):", round(prob_excede, 4), "\n")
-
-# Visualizar CDF empírica
-ggplot(df_lhs, aes(x = Q)) +
-  stat_ecdf(geom = "step") + labs(title = "CDF empírica de Q (LHS)", x = "Q (mm)", y = "F(Q)")
-
-#-------------- Observações finais ---------------
-cat("\nObservações:\n")
-cat("- Ajuste as distribuições de P e CN com base em dados locais quando possível.\n")
-cat("- Se P e CN forem correlacionados (p.ex. áreas úmidas tendem a ter CN diferentes), modele a correlação no processo de amostragem.\n")
-cat("- Para probabilidades de eventos raros (ex.: Q muito grande), considere métodos de amostragem especializada.\n")
+  df_nse <- rbind(df_nse, data.frame(cn = cn, nse = nse_value))
+}

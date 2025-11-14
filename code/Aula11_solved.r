@@ -14,18 +14,18 @@ library(lubridate) # Para manipulação de datas
 
 library(ggplot2) # Para visualização dos resultados
 
-#%% 0.1 instalando o pacote rdwd (se necessário) ------
+# %% 0.1 instalando o pacote rdwd (se necessário) ------
 #' este pacote permite baixar dados hidrológicos do serviço meteorológico
 #' alemão (DWD)
 
-# Verifica se o pacote está instalado, se não, instala
-options(repos = c(CRAN = "https://cran.rstudio.com/"))
-if (!require(rdwd, quietly = TRUE)) {
-    install.packages("rdwd")
-    library(rdwd)
-} else {
-    library(rdwd) # Carrega o pacote RDWD
-}
+# Verifica se options(repos = c(CRAN = "https://cran.rstudio.com/"))
+
+# options(repos = c(CRAN = "https://cran.rstudio.com/"))
+# install.packages(c("rdwd", "rkt"))
+library(rdwd) # Carrega o pacote RDWD
+library(rkt)
+library(forecast)
+
 
 #' NOTA:
 #' Nesta aula utilizaremos os dados de chuva e temperatura da estação de
@@ -384,8 +384,6 @@ acf(ts_arima, lag.max = 30, main = "PACF of ARIMA", type = "partial")
 
 # %% 5.7. Modelagem com ARIMA ------
 
-library(forecast)
-
 # Frequência mensal
 data_monthly <- data |>
     mutate(year = lubridate::year(date), month = lubridate::month(date)) |>
@@ -421,8 +419,12 @@ checkresiduals(arima_model)
 # Se sim, o modelo é adequado.
 # repare que os residuos apresentao distribuição normal (histograma) e média 0
 # também não apresentam autocorrelação (ACF).
+ts_residuals <- ts(residuals(arima_model))
+acf(ts_residuals, lag.max = 50, main = "ACF of ARIMA")
+# pequena correlação em lags multiplos de 12 (sazonalidade anual)
+
+# teste de estacionariedade dos resíduos - Augmented Dickey-Fuller Test
 tseries::adf.test(residuals(arima_model))
-# residuais são estacionários (p < 0.05)
 
 # parametros do modelo
 arimaorder(arima_model)
@@ -453,7 +455,150 @@ plot(
 #' para os anos seguintes. Compare as previsões com os dados observados
 #' de 2001 a 2024.
 
-# %% 6. Bonus - Análise de Breakpoints ------
+# %% 6. Análise de Tendência ------
+# Mann-Kendall test for trend
+
+#temp média anual e prec acumulada anual
+data_year <- data |>
+    mutate(
+        year = lubridate::year(date),
+    ) |>
+    group_by(year) |>
+    summarise(
+        prec = sum(prec, na.rm = TRUE),
+        temp = mean(temp, na.rm = TRUE)
+    ) |>
+    ungroup()
+
+
+# %% 6.1 Mann-Kendall test for precipitation
+mk_prec <- rkt(date = data_year$year, y = data_year$prec)
+print(mk_prec)
+
+slope_prec <- mk_prec$B
+# %% plotando a tendência de precipitação anual ------
+ggplot(data_year, aes(x = year, y = prec)) +
+    geom_point() +
+    geom_abline(
+        intercept = mean(data_year$prec[1:6]) - slope_prec * data_year$year[1],
+        slope = slope_prec,
+        color = "red",
+        size = 1
+    ) +
+    labs(
+        title = "Annual Precipitation with Trend Line",
+        x = "Year",
+        y = "Annual Precipitation (mm)"
+    ) +
+    theme_minimal() +
+    theme(text = element_text(size = 20))
+
+# comparando com modlo linear simples
+lm_prec <- lm(prec ~ year, data = data_year)
+slope_lm <- lm_prec$coefficients['year']
+
+print(paste("Mann-Kendall slope:", slope_prec, "Linear model slope:", slope_lm))
+print(paste(
+    "Difference (%):",
+    round((slope_prec - slope_lm) / slope_prec * 100, 3)
+))
+
+#%% 6.2 Mann-Kendall test for temperature
+mk_temp <- rkt(date = data_year$year, y = data_year$temp)
+print(mk_temp)
+
+slope_temp <- mk_temp$B
+
+# %% plotando a tendência de precipitação anual ------
+ggplot(data_year, aes(x = year, y = temp)) +
+    geom_point() +
+    geom_abline(
+        intercept = mean(data_year$temp[1:6]) - slope_temp * data_year$year[1],
+        slope = slope_temp,
+        color = "red",
+        size = 1
+    ) +
+    labs(
+        title = "Annual Temperature with Trend Line",
+        x = "Year",
+        y = "Annual Mean Temp (°C)"
+    ) +
+    theme_minimal() +
+    theme(text = element_text(size = 20))
+
+# comparando com modlo linear simples
+lm_temp <- lm(temp ~ year, data = data_year)
+slope_lm <- lm_temp$coefficients['year']
+
+print(paste("Mann-Kendall slope:", slope_temp, "Linear model slope:", slope_lm))
+print(paste(
+    "Difference (%):",
+    round((slope_temp - slope_lm) / slope_temp * 100, 3)
+))
+
+# %% 6.3 seasonal Mann-Kendall test ------
+# seasonal Mann-Kendall test for monthly data
+
+data_month <- data |>
+    mutate(
+        year = lubridate::year(date),
+        month = lubridate::month(date)
+    ) |>
+    group_by(month, year) |>
+    summarise(
+        prec = sum(prec, na.rm = TRUE),
+        temp = mean(temp, na.rm = TRUE)
+    ) |>
+    ungroup() |>
+    data.frame() |>
+    mutate(year = year + (month - 1) / 12) # fractional year for monthly data
+
+mk_temp_seasonal <- rkt(
+    date = data_month$year,
+    y = data_month$temp,
+    block = data_month$month,
+    correct = TRUE
+)
+
+# %% visualizando os resultados
+print(mk_temp_seasonal)
+
+slope_season <- mk_temp_seasonal$B
+
+ggplot(data_year, aes(x = year, y = temp)) +
+    geom_point() +
+    geom_abline(
+        intercept = mean(data_year$temp[1:6]) -
+            slope_season * data_year$year[1],
+        slope = slope_season,
+        color = "red",
+        size = 1
+    ) +
+    labs(
+        title = "Annual Precipitation with Trend Line",
+        x = "Year",
+        y = "Annual Precipitation (mm)"
+    ) +
+    theme_minimal() +
+    theme(text = element_text(size = 20))
+
+#' o teste de Mann-Kendall sazonal leva em consideração a
+#' variação sazonal nos dados, o que pode fornecer uma análise
+#' mais precisa da tendência subjacente. Ao comparar os resultados
+#' do teste de Mann-Kendall sazonal com o teste padrão, é possível
+#' observar diferenças na magnitude e significância da tendência,
+#' destacando a importância de considerar a sazonalidade ao analisar
+#' séries temporais climáticas.
+#'
+#' EXERCÍCIO: Aplique o teste de Mann-Kendall sazonal para os dados
+#' de precipitação e compare os resultados com o teste padrão.
+#'
+#' NOTA: Existe ainda a variante do teste de Mann-Kendall regional, em que
+#' vários locais são considerados simultaneamente para avaliar tendências
+#' regionais. Esta variante é particularmente útil em estudos climáticos
+#' que envolvem múltiplas estações meteorológicas em uma região geográfica.
+
+# %% 7. Bonus - Análise de Breakpoints ------
 
 library(strucchange)
 

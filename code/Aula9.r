@@ -4,7 +4,7 @@ Disciplina: Matemática Aplicada à Engenharia Agrícola
 Aula 9 - Equações Diferenciais Ordinárias (EDOs)
 
 Autor: Dr. Pedro Alencar
-05.11.2025
+12.11.2025
 "
 
 #%% 0. Carregando pacotes necessários ------
@@ -12,8 +12,9 @@ library(dplyr)    # Para manipulação de dados
 library(tidyr)    # Para manipulação de dados
 
 library(deSolve)  # Para resolver EDOs
-
 library(ggplot2)  # Para visualização dos resultados
+
+# install.packages('deSolve')
 
 #%% 1. Exemplo simples com deSolve ------
 
@@ -65,9 +66,9 @@ head(out)
 #%% 1.1 plotando resultados ------
 ggplot(out, aes(x = xseq, y = y)) +
   geom_line() +
-  labs(x = "X", y = "Storage (S)") +
+  labs(x = "x", y = "y") +
   theme_minimal() +
-  theme(text = element_text(size = 30))
+  theme(text = element_text(size = 15))
 
 #%% 1.2. Avaliando a solução algébrica ------
 
@@ -124,28 +125,30 @@ ode_fun_reservatorio <- function(t, state, parameters) {
 state_reservatorio <- c(V = 1000)  # volume inicial em hm³
 
 # 3) Definindo os parâmetros
-parameters_reservatorio <- c(I = 10, k = 0.008)
+parameters_reservatorio <- c(I = 100, k = 0.5)
     # inflow em hm³/dia e coeficiente de vazão em 1/dia
 
 # 4) Definindo o tempo de simulação
-times_reservatorio <- seq(0, 365, by = 1) # tempo em dias
+times_reservatorio <- seq(1, 365, by = 1) # tempo em dias
 
 # 5) Rodando a simulação com a função ode()
-out_reservatorio <- ode(y = state_reservatorio, times = times_reservatorio,
-  func = ode_fun_reservatorio, parms = parameters_reservatorio) |>
+out_reservatorio <- ode(y = state_reservatorio,
+                        times = times_reservatorio,
+                        func = ode_fun_reservatorio, 
+                        parms = parameters_reservatorio) |>
   as.data.frame() |>
   mutate(Q = parameters_reservatorio[2] * V) # Calculando a vazão de saída
 
-head(out_reservatorio)
+# head(out_reservatorio)
 
 #%% 2.1 Plotando resultados ------
 ggplot(as.data.frame(out_reservatorio), aes(x = time, y = V)) +
   geom_line(color = "blue", size = 1.5) +
   labs(x = "Tempo (dias)", y = "Volume Armazenado (hm³)") +
-  scale_x_continuous(breaks = seq(0, 365, by = 60)) +
+  scale_x_continuous(breaks = seq(1, 365, by = 60)) +
   scale_y_continuous(breaks = seq(0, 5000, by = 1000), limits = c(0, 5000)) +
   theme_minimal() +
-  theme(text = element_text(size = 30))
+  theme(text = element_text(size = 15))
 
 
 #%% 3. Atividade ------
