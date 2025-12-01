@@ -62,6 +62,13 @@ data <- clim %>%
     ) |>
     dplyr::mutate(date = as.Date(as.character(date), format = "%Y-%m-%d"))
 
+
+# check missing data
+data |> 
+    select(-date) |>
+    summarise_all(is.na) |> 
+    colSums()
+
 # %% 2. Visualizando os dados ------
 
 ggplot(data, aes(x = date)) +
@@ -651,7 +658,7 @@ ci_temp_2 <- confint(bp, breaks = 3, het.err = FALSE, level = 0.95)
 plot(ts_temp)
 lines(ci_temp_2)
 
-# %% testeando a validade dos modelosn
+# %% testeando a validade dos modelos
 # 1. Autocorrelation
 
 acf(fm_1$residuals, type = "correlation") # No autocorrelation observed

@@ -7,8 +7,8 @@ Autor: Dr. Pedro Alencar
 12.11.2025
 "
 
-library(lintr)
-lint("Aula10.r", linters = with_defaults(no_tab_linter = NULL))
+# library(lintr)
+# lint("Aula10.r", linters = with_defaults(no_tab_linter = NULL))
 
 #%% 0. Carregando pacotes necessários ------
 library(dplyr)    # Para manipulação de dados
@@ -42,7 +42,7 @@ ggplot(df_long, aes(x = x, y = y, color = equation)) +
        y = "f(x)",
        color = "Equações") +
   theme_minimal() +
-  theme(text = element_text(size = 30))
+  theme(text = element_text(size = 12))
 
 #%% 2, Resolvendo equações não lineares ------
 #' metodo de Newton-Raphson
@@ -69,7 +69,7 @@ f1 <- function(x) {
 f1_prime <- function(x) {
     2 * x
     }
-root1 <- newton_raphson(f1, f1_prime, x0 = -1)
+root1 <- newton_raphson(f1, f1_prime, x0 = -10)
 cat("Raiz de x^2 - 2 = 0 é:", root1, "\n")
 
 # 2.2 exemplo 2: exp(-x) - x = 0
@@ -89,14 +89,14 @@ f3 <- function(x) {
 f3_prime <- function(x) {
     cos(x) - 1 / 2
 }
-root3 <- newton_raphson(f3, f3_prime, x0 = -10)
+root3 <- newton_raphson(f3, f3_prime, x0 = 0.1)
 cat("Raiz de sin(x) - x/2 = 0 é:", root3, "\n")
 
 #%% 3. Resolvendo equações não lineares com uniroot() ------
 #' A função uniroot() do R pode ser usada para encontrar raízes de funções
 #' uniroot() requer um intervalo onde a função muda de sinal
 #' Exemplo 1: x^2 - 2 = 0
-root1_uniroot <- uniroot(f1, c(0, 2))
+root1_uniroot <- uniroot(f1, c(-10, 10))
 cat("Raiz de x^2 - 2 = 0 usando uniroot é:", root1_uniroot$root, "\n")
 #' Exemplo 2: exp(-x) - x = 0
 root2_uniroot <- uniroot(f2, c(0, 1))
@@ -167,6 +167,16 @@ system_eq(solution$x) # deve ser próximo de c(0, 0)
 
 # Definindo a função para a equação de Green-Ampt
 
+ga_function <- function(x){
+  10 + 2*log(1 + x/2) - x
+}
+
+ga_prime <- function(x){
+  -x/(x+2)
+}
+
+newton_raphson(ga_function, ga_prime, x0 = 3.14)
+
 # plotando a função para visualizar a raiz
 
 #%% 5. Resolvendo a equação de Green-Ampt ------
@@ -185,15 +195,61 @@ system_eq(solution$x) # deve ser próximo de c(0, 0)
 #' f(x) = sin(2x) - cos(x/2) no intervalo (-2π, 2π)
 
 #' 1. plotando a função
+x <-  seq(-2*pi, 2*pi, 0.01)
+y <- sin(2*x) - cos(x/2)
 
+plot(x,y)
 
 #' 2. Encontrando os pontos críticos (derivada igual a zero)
 #' Derivada de f(x)
- 
+
+my_func <- function(x){
+  y <- sin(2*x) - cos(x/2)
+  return(y)
+}
+
+my_func_prime <- function(x){
+  y <- 2*cos(2*x) + sin(x/2)/2
+  return(y)
+}
 #' Encontrando os pontos críticos usando uniroot
 
+intervalo <- seq(-2*pi, 2*pi, 0.01)
+pontos_crit <- c()
+
+for (i in 1:(length(intervalo)-1)){
+  
+  raiz <- tryCatch(
+    {
+      uniroot(my_func_prime, c(intervalo[i], intervalo[i+1]))$root
+    },
+    error = function(e){
+      NULL
+    }
+  )
+  if(!is.null(raiz)){
+    pontos_crit <- c(pontos_crit, raiz)
+  }
+}
+pontos_crit
 
 #' Avaliando a função nos pontos críticos para determinar mínimos e máximos
+
+my_func_prime2 <- function(x){
+  y <- -4*sin(2*x) + cos(x/2)/4 # in class, derivative was wrong
+  return(y)
+}
+
+for (val in pontos_crit){
+  derivada_2 = my_func_prime2(val)
+  
+  if (derivada_2 < 0){
+    print('minima')
+  } else {
+    print('maxima')
+  }
+}
+
 
 
 #' 3. Visualizando os resultados
@@ -218,11 +274,50 @@ system_eq(solution$x) # deve ser próximo de c(0, 0)
 #' 
 #' 1. Definindo a função objetivo e a restrição
 
+producao <- function(vars){
+  x <- vars[1]
+  y <- vars[2]
+  
+  prod <- 100*(x*y)^0.5
+  return(prod)
+}
+
+restricao <- function(vars){
+  x <- vars[1]
+  y <- vars[2]
+  
+  rest <- 20*x + 30*y - 6000
+  return(rest)  
+}
    
 #' 2. Definindo a função Lagrangeana
 
+lagrange_func <- function(vars){
+  x <- vars[1]
+  y <- vars[2]
+  lambda <- vars[3]
+  
+  L <- producao(c(x,y)) - lambda*restricao(c(x,y))
+  return(-L) 
+  
+}
 
 #' 3. Encontrando os pontos críticos da Lagrangeana
 
+chute_inicial <- c(100, 100, 1)
+
+solucao <- nleqslv(chute_inicial, function(vars){
+  x <- vars[1]
+  y <- vars[2]
+  lambda <- vars[3]
+  
+  dL_x <- 50*(y/x)^0.5 - lambda*20
+  dL_y <- 50*(x/y)^0.5 - lambda*30
+  dL_lambda <- restricao(c(x,y)) 
+  
+  return(c(dL_x, dL_y, dL_lambda))
+})
+
+solucao$x
 
 # Visualizando a função de produção e a restrição orçamentária

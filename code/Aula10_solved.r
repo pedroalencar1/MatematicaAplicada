@@ -8,7 +8,7 @@ Autor: Dr. Pedro Alencar
 "
 
 library(lintr)
-lint("Aula10_solved.r", linters = with_defaults(no_tab_linter = NULL))
+# lint("Aula10_solved.r", linters = with_defaults(no_tab_linter = NULL))
 
 #%% 0. Carregando pacotes necessários ------
 library(dplyr) # Para manipulação de dados
