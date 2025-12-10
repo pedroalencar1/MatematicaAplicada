@@ -4,7 +4,7 @@ Disciplina: Matemática Aplicada à Engenharia Agrícola
 Aula 11 - Séries Temporais Hidrológicas
 
 Autor: Dr. Pedro Alencar
-19.11.2025
+10.12.2025
 "
 
 #%% 0. Carregando pacotes necessários ------
@@ -21,7 +21,7 @@ library(ggplot2) # Para visualização dos resultados
 # Verifica se options(repos = c(CRAN = "https://cran.rstudio.com/"))
 
 # options(repos = c(CRAN = "https://cran.rstudio.com/"))
-# install.packages(c("rdwd", "rkt"))
+# install.packages(c("rdwd", "rkt", 'forecast'))
 library(rdwd) # Carrega o pacote RDWD
 library(rkt)
 library(forecast)
@@ -36,6 +36,7 @@ library(forecast)
 #' Alemão (DWD).
 
 # %% 1. Baixando os dados de chuva da estação de Potsdam ------
+
 
 # selecione dos dados
 link <- selectDWD(
@@ -62,6 +63,7 @@ data <- clim %>%
     ) |>
     dplyr::mutate(date = as.Date(as.character(date), format = "%Y-%m-%d"))
 
+head(data)
 
 # check missing data
 data |> 
@@ -69,26 +71,31 @@ data |>
     summarise_all(is.na) |> 
     colSums()
 
+data <- read.csv('/Users/alencar/Library/CloudStorage/OneDrive-Personal/@2025/@PPGEA/Matematica Aplicada/Aula 11/data_aula11.csv')
+data <- data |>
+    dplyr::mutate(date = as.Date(as.character(date), 
+                                 format = "%Y-%m-%d"))
+
 # %% 2. Visualizando os dados ------
 
 ggplot(data, aes(x = date)) +
     geom_line(aes(y = prec), color = "blue", size = 1) +
     labs(x = "Data", y = "Chuva (mm)") +
     theme_minimal() +
-    theme(text = element_text(size = 30))
+    theme(text = element_text(size = 12))
 
 ggplot(data, aes(x = date)) +
-    geom_line(aes(y = temp), color = "red", size = 1) +
+    geom_line(aes(y = temp), color = "red", size = 0.5) +
     labs(x = "Data", y = "Chuva (mm)") +
     theme_minimal() +
-    theme(text = element_text(size = 30))
+    theme(text = element_text(size = 12))
 
 # %% 3. Exercício ------
 #' Avaliar os componentes da série temporal de chuva (tendência, sazonalidade,
 #' ciclo e resíduo/ruído)
-decompose(ts(data$prec, frequency = 365.25), type = "additive") |> plot()
+decompose(ts(data$temp, frequency = 365.25), type = "additive") |> plot()
 
-decompose(ts(data$prec, frequency = 365.25), type = "multiplicative") |> plot()
+decompose(ts(data$temp, frequency = 365.25), type = "multiplicative") |> plot()
 
 #%% 3.1 - A série é muito longa. Vamos explorar os últimos 5 anos ------
 data_10 <- data |>
@@ -237,7 +244,7 @@ data_10 %>%
     ) +
     labs(x = "Data", y = "Chuva (mm)") +
     theme_minimal() +
-    theme(text = element_text(size = 30))
+    theme(text = element_text(size = 12))
 
 # %% 4.2 Autocorrelação ------
 
@@ -265,6 +272,8 @@ set.seed(123)
 white_noise <- rnorm(1000, mean = 0, sd = 1) # 100 valores aleatórios
 ts_white_noise <- ts(white_noise)
 plot(ts_white_noise, main = "White Noise", ylab = "Value", xlab = "Time")
+
+# decompose(ts(white_noise, frequency =  10), type = "additive") |> plot()
 
 acf(ts_white_noise, lag.max = 30, main = "ACF of White Noise")
 acf(ts_white_noise, lag.max = 30, main = "ACF of White Noise", type = "partial")
@@ -478,6 +487,18 @@ data_year <- data |>
     ungroup()
 
 
+
+
+
+
+ggplot(data = data_year, aes(x = year, y = prec))+
+    geom_point()+
+    geom_smooth(method='lm', formula= y~x)+
+    theme_minimal()
+
+line(data_year$year, data_year$prec)
+
+
 # %% 6.1 Mann-Kendall test for precipitation
 mk_prec <- rkt(date = data_year$year, y = data_year$prec)
 print(mk_prec)
@@ -498,7 +519,7 @@ ggplot(data_year, aes(x = year, y = prec)) +
         y = "Annual Precipitation (mm)"
     ) +
     theme_minimal() +
-    theme(text = element_text(size = 20))
+    theme(text = element_text(size = 12))
 
 # comparando com modlo linear simples
 lm_prec <- lm(prec ~ year, data = data_year)
@@ -531,7 +552,7 @@ ggplot(data_year, aes(x = year, y = temp)) +
         y = "Annual Mean Temp (°C)"
     ) +
     theme_minimal() +
-    theme(text = element_text(size = 20))
+    theme(text = element_text(size = 12))
 
 # comparando com modlo linear simples
 lm_temp <- lm(temp ~ year, data = data_year)
@@ -587,7 +608,7 @@ ggplot(data_year, aes(x = year, y = temp)) +
         y = "Annual Precipitation (mm)"
     ) +
     theme_minimal() +
-    theme(text = element_text(size = 20))
+    theme(text = element_text(size = 12))
 
 #' o teste de Mann-Kendall sazonal leva em consideração a
 #' variação sazonal nos dados, o que pode fornecer uma análise
@@ -633,10 +654,10 @@ plot(bp)
 # A recomendação estatistica é escolher o numero de breakpoints
 # que minimiza o BIC (Bayesian Information Criterion). Contudo, é comum
 # recomendar-se a escolha do numero de breakpoints em que BIC e RSS cruzem-se.
-# Pelo gráfico, o critério 1 sugere 1 breakpoint, enquanto o critério 2 sugere
-# 2 breakpoints.
+# Pelo gráfico, o critério 1 sugere 2 breakpoint, enquanto o critério 2 sugere
+# 3 breakpoints.
 
-# %% Caso com 1 breakpoint
+# %% Caso com 2 breakpoint
 # cria um fator para os segmentos
 fac_1 <- breakfactor(bp, breaks = 2, label = "seg")
 
@@ -650,7 +671,7 @@ ci_temp_1 <- confint(bp, breaks = 2, het.err = FALSE, level = 0.95)
 plot(ts_temp)
 lines(ci_temp_1)
 
-# Caso com 2 breakpoints
+# Caso com 3 breakpoints
 fac_2 <- breakfactor(bp, breaks = 3, label = "seg")
 fm_2 <- lm(ts_temp ~ fac_2)
 ci_temp_2 <- confint(bp, breaks = 3, het.err = FALSE, level = 0.95)

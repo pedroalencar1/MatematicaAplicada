@@ -4,7 +4,7 @@ Disciplina: Matemática Aplicada à Engenharia Agrícola
 Aula 12 - Sensibilidade, incerteza e Monte Carlo
 
 Autor: Dr. Pedro Alencar
-26.11.2025
+03.12.2025
 "
 
 #%% 0. Carregando pacotes necessários ------
@@ -15,7 +15,7 @@ library(lubridate) # Para manipulação de datas
 library(ggplot2) # Para visualização dos resultados
 library(ggforce)
 
-library(sensitivity)
+library(sensitivity) # método de morris
 
 
 # %% 1. Análise de sensibilidade ------------------------------------------
@@ -61,12 +61,17 @@ scs_runoff <- function(prec, cn = 95, ia_frac = 0.1) {
 
 
 #%% 1.1 Dados de chuva e "vazão" -----------------------------------------------
+setwd('/Users/alencar/Library/CloudStorage/OneDrive-Personal/@2025/@PPGEA/Matematica Aplicada/code')
 
 df <- read.csv('../Aula 12/estacao_acarau_1974_2024.csv') |>
   arrange(desc(row_number()))
 
-# parâmetros "verdadeiros" para gerar observações
+tail(df)
 
+prec <- df$prec
+
+# parâmetros "verdadeiros" para gerar observações
+# série sintética
 cn_true <- 92
 ia_frac_true <- 0.12
 
@@ -90,7 +95,7 @@ model_nse <- function(X) {
     cn = prow[1]
     ia_frac = prow[2]
     sim <- scs_runoff(prec, cn, ia_frac)
-    nse(dischage_true, sim)
+    nse(dischage_obs, sim)
   })
 }
 
@@ -159,7 +164,8 @@ plot(M)
 # %% 2.1 Exemplo simples de Monte Carlo para estimar o valor de pi ------
 
 # Número de simulações
-n_sim <- 1000
+n_sim <- 1000 
+# alto -> >> 30!
 
 monte_carlo_pi <- function(n_sim, set_seed = TRUE) {
   # Gerar pontos aleatórios (x, y) no quadrado unitário
@@ -208,7 +214,7 @@ ggplot(data.frame(x, y), aes(x = x, y = y)) +
   scale_x_continuous(limits = c(0, 1)) +
   scale_y_continuous(limits = c(0, 1)) +
   theme_minimal() +
-  theme(text = element_text(size = 30))
+  theme(text = element_text(size = 12))
 
 
 #%% 2.3 monte carlo convergence --------
@@ -240,7 +246,7 @@ ggplot(
   ) +
   geom_hline(yintercept = pi, linetype = "dashed", color = "red") +
   theme_minimal() +
-  theme(text = element_text(size = 20))
+  theme(text = element_text(size = 12))
 
 #%% 3 Aplicação em Engenharia Agrícola ------
 # uso de Monte Carlo para estimar incertezas na performance de modelos hidrológicos simples
@@ -307,7 +313,7 @@ print(paste(
 # %% 4 Avaliando incertezas em parâmetros de modelos ------
 
 #dados de chuva
-df <- read.csv('Aula 12/estacao_acarau_1974_2024.csv') |>
+df <- read.csv('../Aula 12/estacao_acarau_1974_2024.csv') |>
   arrange(desc(row_number()))
 head(df)
 
@@ -329,7 +335,7 @@ cn <- 90
 storage <- (25400 / cn) - 254 # armazenamento potencial (mm)
 
 #' a equação que relaciona Ia com P e Q para um CN conhecido é:
-#' Ia^2 + Ia(q - 2P) - Q(P + S) + P^2 = 0
+#' Ia^2 + Ia(Q - 2P) - Q(P + S) + P^2 = 0
 #'
 #' esta é uma equação quadrática em Ia, simples de resolver algebricamente.
 
@@ -364,6 +370,8 @@ df_q <- df_q |>
     ia_frac_2 = ifelse(ia_frac_2 <= 0 | ia_frac_2 >= 1, NA, ia_frac_2)
   )
 
+
+head(df_q)
 #%% 4.2 testar soluções e obter solução real ----
 
 # função SCS-CN para um único par (P, Ia_frac)
@@ -407,6 +415,8 @@ df_q <- df_q |>
   ungroup() |>
   filter(is.na(ia_estimado) == FALSE)
 
+head(df_q)
+
 ggplot(df_q) +
   geom_histogram(aes(x = ia_estimado), bins = 30, fill = "lightblue") +
   labs(
@@ -415,7 +425,7 @@ ggplot(df_q) +
     title = "Distribuição estimada de Ia_frac a partir de P e Q observados"
   ) +
   theme_minimal() +
-  theme(text = element_text(size = 20))
+  theme(text = element_text(size = 12))
 
 #%% 4.3 ajustar distribuição gamma aos valores estimados de ia_frac ------
 
@@ -470,11 +480,11 @@ df_vazao |>
     year = lubridate::year(as.Date(date)),
     month = lubridate::month(as.Date(date))
   ) |>
-  filter(year == 2002, month %in% 3:4) |>
+  filter(year == 2024, month %in% 3:4) |>
   ggplot(aes(x = as.Date(date))) +
   geom_ribbon(aes(ymin = q2_5, ymax = q97_5), fill = "lightblue") +
   geom_point(aes(y = median), color = "blue", size = 1) +
-  geom_point(aes(y = runoff), color = "red", size = 2, alpha = 1) +
+  geom_point(aes(y = runoff), color = "red", size = 1, alpha = 1) +
   labs(
     x = "Data",
     y = "Vazão (mm)",
